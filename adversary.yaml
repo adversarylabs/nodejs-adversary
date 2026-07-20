@@ -1,0 +1,31 @@
+name: nodejs
+version: 0.0.0
+description: Reviews Node.js for dynamic code execution, shell injection, and disabled TLS verification.
+
+triggers:
+  manual: true
+  files_changed:
+    - "**/*.js"
+    - "**/*.mjs"
+    - "**/*.cjs"
+    - "**/*.ts"
+
+runtime:
+  name: node
+  version: "22"
+  command:
+    - dist/index.js
+
+permissions:
+  enforcement: advisory
+  filesystem:
+    read:
+      - .
+    write:
+      - .adversary/results
+  network: false
+  environment:
+    allow: []
+
+findings:
+  format: adversary.review.v1

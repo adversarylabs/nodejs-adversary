@@ -1,0 +1,1 @@
+execFile('git', ['show', input]);
