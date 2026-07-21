@@ -10,6 +10,13 @@ triggers:
     - "**/*.cjs"
     - "**/*.ts"
 
+detection:
+  files:
+    - "**/*.js"
+    - "**/*.mjs"
+    - "**/*.cjs"
+    - "**/*.ts"
+
 runtime:
   name: node
   version: "22"

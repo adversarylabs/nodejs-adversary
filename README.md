@@ -16,3 +16,7 @@ npm test
 adversary validate .
 adversary pack --check .
 ```
+
+## Automatic detection
+
+`adversary auto` selects the nodejs adversary when changes include `**/*.js` or `**/*.mjs`, plus the other domain-specific patterns declared in `adversary.yaml`. Unrelated changes do not select it.
