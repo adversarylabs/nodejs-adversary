@@ -1,5 +1,5 @@
 name: lang/nodejs
-version: 0.0.4
+version: 0.0.5
 description: Reviews Node.js for dynamic code execution, shell injection, and disabled TLS verification.
 
 triggers:
