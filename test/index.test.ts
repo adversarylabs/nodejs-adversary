@@ -12,6 +12,7 @@ const ruleCases = [
   { key: "path-traversal", id: "nodejs.path-traversal" },
   { key: "weak-random-token", id: "nodejs.weak-random-token" },
   { key: "vm-as-sandbox", id: "nodejs.vm-as-sandbox" },
+  { key: "event-listener-cleanup", id: "nodejs.event-listener-cleanup" },
 ];
 
 test("every initial rule has focused vulnerable and clean coverage", async () => {

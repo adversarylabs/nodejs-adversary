@@ -20,6 +20,10 @@ interface MissingFileMatch {
     triggerFiles: string[];
     requiredFiles: string[];
 }
+interface EventListenerCleanupMatch {
+    kind: "event-listener-cleanup";
+    files: string[];
+}
 export interface RuleSpec {
     id: string;
     title: string;
@@ -32,7 +36,7 @@ export interface RuleSpec {
     recommendation: string;
     complexity: "trivial" | "small" | "medium" | "large";
     tags: string[];
-    match: ContentMatch | MissingContentMatch | MissingFileMatch;
+    match: ContentMatch | MissingContentMatch | MissingFileMatch | EventListenerCleanupMatch;
 }
 export interface AdversarySpec {
     id: string;
@@ -44,7 +48,7 @@ export interface AdversarySpec {
 export declare const spec: {
     readonly id: "nodejs";
     readonly displayName: "Node.js";
-    readonly description: "Reviews Node.js for dynamic code execution, shell injection, and disabled TLS verification.";
+    readonly description: "Reviews Node.js for security hazards and lifecycle cleanup leaks.";
     readonly files: ["**/*.js", "**/*.mjs", "**/*.cjs", "**/*.ts"];
     readonly rules: [{
         readonly id: "nodejs.shell-exec";
@@ -171,6 +175,22 @@ export declare const spec: {
                 readonly flags: "i";
             };
             readonly requires: [];
+        };
+    }, {
+        readonly id: "nodejs.event-listener-cleanup";
+        readonly title: "Lifecycle cleanup leaves sibling EventEmitter listeners attached";
+        readonly summary: "Lifecycle cleanup leaves sibling EventEmitter listeners attached";
+        readonly category: "reliability";
+        readonly severity: "medium";
+        readonly confidence: "medium";
+        readonly whyItMatters: "A once listener removes only the registration that fired. Sibling lifecycle listeners using the same callback keep its closure and resources alive unless cleanup unregisters them too.";
+        readonly impact: "Long-lived or reused emitters retain stale callbacks, causing memory/resource leaks and cleanup to run again on later events.";
+        readonly recommendation: "In the shared cleanup callback, call removeListener or off for every lifecycle event that registered it.";
+        readonly complexity: "trivial";
+        readonly tags: ["reliability", "event-emitter", "resource-leak"];
+        readonly match: {
+            readonly kind: "event-listener-cleanup";
+            readonly files: ["**/*.js", "**/*.mjs", "**/*.cjs", "**/*.ts"];
         };
     }];
 };

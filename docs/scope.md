@@ -8,13 +8,14 @@ Source of truth for what this adversary is *for*.
 
 ## Mission
 
-Review Node.js for dynamic code execution, shell injection, and disabled TLS verification.
+Review Node.js for dynamic code execution, shell injection, disabled TLS verification, and lifecycle cleanup leaks.
 
 ## In scope (fair miss if humans raised it and we did not)
 
 - eval/Function dynamic code
 - Shell injection
 - TLS verification disabled
+- EventEmitter lifecycle cleanup that leaves sibling listeners attached
 
 ## Out of scope (not a miss for this adversary)
 

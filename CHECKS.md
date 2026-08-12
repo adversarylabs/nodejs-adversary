@@ -1,6 +1,6 @@
 # Checks — what nodejs detects
 
-This file is the **public audit list** of detectors for the **nodejs** adversary. High-confidence server-side JavaScript/Node security defects with file:line evidence. Framework-specialized concerns (React components, Next.js config) and package-manager supply chain are owned elsewhere — this adversary covers the Node runtime security surface.
+This file is the **public audit list** of detectors for the **nodejs** adversary. High-confidence server-side JavaScript/Node security and lifecycle defects with file:line evidence. Framework-specialized concerns (React components, Next.js config) and package-manager supply chain are owned elsewhere — this adversary covers the Node runtime surface.
 
 Runtime source of truth: [`src/spec.ts`](src/spec.ts) / [`src/rules.ts`](src/rules.ts).
 
@@ -65,6 +65,17 @@ Public grounding: Node.js security best-practices docs, OWASP command/code injec
 ---
 
 ## Medium
+
+### `nodejs.event-listener-cleanup`
+
+| | |
+| --- | --- |
+| **What** | A shared lifecycle cleanup callback leaves sibling EventEmitter listeners attached |
+| **Why** | `once()` removes only the registration that fired; sibling registrations retain the callback closure and can invoke cleanup again on a reused emitter |
+| **Looks for** | The same named teardown callback registered on the same emitter for two or more lifecycle events, without matching `removeListener`/`off` calls |
+| **Stays quiet when** | Cleanup unregisters every sibling; callbacks are ordinary observers; events or emitters differ |
+| **Public examples** | [Node.js core FileHandle stream review](https://github.com/nodejs/node/pull/64227#discussion_r3745307109) |
+| **Remediation** | Unregister every lifecycle event that shares the callback as part of cleanup |
 
 ### `nodejs.weak-random-token`
 
