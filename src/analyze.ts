@@ -1,16 +1,24 @@
-import { readFile, readdir } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { readdir } from "node:fs/promises";
 import { join, sep } from "node:path";
+import { promisify } from "node:util";
 import { type RuleContext } from "@adversarylabs/sdk";
 import { observationFor } from "./rules.js";
 import { spec, type MatchExpression, type RuleSpec } from "./spec.js";
 
 const SKIPPED = new Set([".adversary", ".git", ".hg", ".next", ".svn", "coverage", "dist", "node_modules", "target", "vendor"]);
 const MAX_FILES = 5000;
+const execute = promisify(execFile);
 
-interface SourceFile { path: string; source: string }
+interface SourceFile {
+  path: string;
+  source: string;
+  changedLines: Set<number>;
+  status: "added" | "modified" | "repository";
+}
 interface Detection { rule: RuleSpec; file: string; line: number; snippet: string; label: string; data: Record<string, unknown> }
-interface NamedFunction { name: string; body: string }
-interface ListenerCall { receiver: string; event: string; callback: string; index: number }
+interface NamedFunction { name: string; body: string; bodyStart: number }
+interface ListenerCall { receiver: string; event: string; callback: string; index: number; end: number }
 
 const LIFECYCLE_EVENTS = new Set(["abort", "close", "disconnect", "end", "error", "exit", "finish", "timeout"]);
 
@@ -23,7 +31,19 @@ export async function analyzeRepository(ctx: RuleContext): Promise<void> {
       spec.files.some((glob) => matchesGlob(path, glob)),
     limit: MAX_FILES,
   });
-  const sources: SourceFile[] = scoped.map((file) => ({ path: file.path, source: file.content }));
+  const wholeTarget = ctx.change === null || ctx.change.scanMode === "all";
+  const sources: SourceFile[] = [];
+  for (const file of scoped) {
+    const change = wholeTarget || file.status === "repository"
+      ? { changedLines: new Set<number>(), status: "repository" as const }
+      : await changedSource(ctx, file.path);
+    sources.push({
+      path: file.path,
+      source: file.content,
+      changedLines: change.changedLines,
+      status: change.status,
+    });
+  }
   ctx.summary.files_scanned = sources.length;
 
   const detections = spec.rules.flatMap((rule) => evaluate(rule, sources, allPaths));
@@ -58,7 +78,7 @@ function evaluate(rule: RuleSpec, sources: SourceFile[], allPaths: string[]): De
   if (match.kind === "missing-content") {
     return matchingSources.flatMap((file) => {
       if (!test(file.source, match.trigger) || test(file.source, match.required)) return [];
-      const location = locate(file.source, match.trigger);
+      const location = locateEligible(file, match.trigger);
       if (location === undefined) return [];
       return [{ rule, file: file.path, ...location, label: rule.title, data: { requiredPattern: match.required.pattern } }];
     });
@@ -66,7 +86,7 @@ function evaluate(rule: RuleSpec, sources: SourceFile[], allPaths: string[]): De
 
   return matchingSources.flatMap((file) => {
     if (!match.requires.every((pattern) => test(file.source, pattern))) return [];
-    const location = locate(file.source, match.pattern);
+    const location = locateEligible(file, match.pattern, match.anchors);
     if (location === undefined) return [];
     return [{ rule, file: file.path, ...location, label: rule.title, data: { matchedPattern: match.pattern.pattern } }];
   });
@@ -91,7 +111,7 @@ function findIncompleteListenerCleanup(rule: RuleSpec, file: SourceFile): Detect
 
     const callback = functions.get(first.callback);
     if (callback === undefined || !isTeardownCallback(callback)) continue;
-    const removals = findListenerCalls(callback.body, /\b(removeListener|off)\b/);
+    const removals = findListenerCalls(callback.body, /\b(removeListener|off)\b/, callback.bodyStart);
     const removedEvents = new Set(
       removals
         .filter((call) => call.receiver === first.receiver && call.callback === first.callback)
@@ -100,12 +120,16 @@ function findIncompleteListenerCleanup(rule: RuleSpec, file: SourceFile): Detect
     const missingEvents = events.filter((event) => !removedEvents.has(event));
     if (missingEvents.length === 0) continue;
 
-    const line = file.source.slice(0, first.index).split(/\r?\n/).length;
+    const relevantRemovals = removals.filter(
+      (call) => call.receiver === first.receiver && call.callback === first.callback,
+    );
+    const line = eligibleRangesAnchor(file, [...calls, ...relevantRemovals]);
+    if (line === undefined) continue;
     detections.push({
       rule,
       file: file.path,
       line,
-      snippet: file.source.split(/\r?\n/)[line - 1]?.trim().slice(0, 240) ?? "",
+      snippet: snippetAt(file.source, line),
       label: `${first.callback} remains registered for ${missingEvents.join(", ")}`,
       data: {
         receiver: first.receiver,
@@ -133,7 +157,7 @@ function findNamedFunctions(source: string): Map<string, NamedFunction> {
       if (name === undefined || match.index === undefined || functions.has(name)) continue;
       const openBrace = source.indexOf("{", match.index + match[0].length - 1);
       const closeBrace = findClosingBrace(source, openBrace);
-      if (closeBrace !== undefined) functions.set(name, { name, body: source.slice(openBrace + 1, closeBrace) });
+      if (closeBrace !== undefined) functions.set(name, { name, body: source.slice(openBrace + 1, closeBrace), bodyStart: openBrace + 1 });
     }
   }
 
@@ -174,7 +198,7 @@ function findClosingBrace(source: string, openBrace: number): number | undefined
   return undefined;
 }
 
-function findListenerCalls(source: string, method: RegExp): ListenerCall[] {
+function findListenerCalls(source: string, method: RegExp, offset = 0): ListenerCall[] {
   const methodPattern = method.source;
   const expression = new RegExp(
     `([A-Za-z_$][\\w$]*(?:(?:\\.[A-Za-z_$][\\w$]*)|(?:\\[[^\\]\\r\\n]+\\]))*)\\s*\\.\\s*${methodPattern}\\s*\\(\\s*(['"])([^'"\\r\\n]+)\\3\\s*,\\s*([A-Za-z_$][\\w$]*)\\b`,
@@ -186,7 +210,7 @@ function findListenerCalls(source: string, method: RegExp): ListenerCall[] {
     const event = match[4];
     const callback = match[5];
     if (receiver !== undefined && event !== undefined && callback !== undefined && match.index !== undefined) {
-      calls.push({ receiver, event, callback, index: match.index });
+      calls.push({ receiver, event, callback, index: offset + match.index, end: offset + match.index + match[0].length });
     }
   }
   return calls;
@@ -201,11 +225,126 @@ function test(source: string, expression: MatchExpression): boolean {
   return new RegExp(expression.pattern, expression.flags).test(source);
 }
 
-function locate(source: string, expression: MatchExpression): { line: number; snippet: string } | undefined {
-  const match = new RegExp(expression.pattern, expression.flags).exec(source);
-  if (match?.index === undefined) return undefined;
-  const line = source.slice(0, match.index).split(/\r?\n/).length;
-  return { line, snippet: source.split(/\r?\n/)[line - 1]?.trim().slice(0, 240) ?? "" };
+function locateEligible(
+  file: SourceFile,
+  expression: MatchExpression,
+  anchors?: readonly MatchExpression[],
+): { line: number; snippet: string } | undefined {
+  const flags = expression.flags.includes("g") ? expression.flags : `${expression.flags}g`;
+  for (const match of file.source.matchAll(new RegExp(expression.pattern, flags))) {
+    if (match.index === undefined || match[0] === "") continue;
+    const line = file.status === "modified" && anchors !== undefined
+      ? eligibleExpressionAnchor(file, match.index, match[0], anchors)
+      : eligibleRangeAnchor(file, match.index, match.index + match[0].length);
+    if (line !== undefined) return { line, snippet: snippetAt(file.source, line) };
+  }
+  return undefined;
+}
+
+function eligibleExpressionAnchor(
+  file: SourceFile,
+  offset: number,
+  matchedSource: string,
+  anchors: readonly MatchExpression[],
+): number | undefined {
+  let eligible: number | undefined;
+  for (const anchor of anchors) {
+    const flags = anchor.flags.includes("g") ? anchor.flags : `${anchor.flags}g`;
+    for (const match of matchedSource.matchAll(new RegExp(anchor.pattern, flags))) {
+      if (match.index === undefined || match[0] === "") continue;
+      const line = eligibleRangeAnchor(
+        file,
+        offset + match.index,
+        offset + match.index + match[0].length,
+      );
+      if (line !== undefined && (eligible === undefined || line < eligible)) eligible = line;
+    }
+  }
+  return eligible;
+}
+
+function eligibleRangesAnchor(
+  file: SourceFile,
+  ranges: readonly Pick<ListenerCall, "index" | "end">[],
+): number | undefined {
+  if (file.status !== "modified") {
+    const first = ranges.reduce<Pick<ListenerCall, "index" | "end"> | undefined>(
+      (earliest, range) => earliest === undefined || range.index < earliest.index ? range : earliest,
+      undefined,
+    );
+    return first === undefined ? undefined : lineAt(file.source, first.index);
+  }
+
+  let anchor: number | undefined;
+  for (const range of ranges) {
+    const candidate = eligibleRangeAnchor(file, range.index, range.end);
+    if (candidate !== undefined && (anchor === undefined || candidate < anchor)) anchor = candidate;
+  }
+  return anchor;
+}
+
+function eligibleRangeAnchor(file: SourceFile, start: number, end: number): number | undefined {
+  const startLine = lineAt(file.source, start);
+  if (file.status !== "modified") return startLine;
+  const endLine = lineAt(file.source, Math.max(start, end - 1));
+  for (let line = startLine; line <= endLine; line += 1) {
+    if (file.changedLines.has(line)) return line;
+  }
+  return undefined;
+}
+
+function lineAt(source: string, index: number): number {
+  return source.slice(0, index).split(/\r?\n/).length;
+}
+
+function snippetAt(source: string, line: number): string {
+  return source.split(/\r?\n/)[line - 1]?.trim().slice(0, 240) ?? "";
+}
+
+async function changedSource(
+  ctx: RuleContext,
+  path: string,
+): Promise<Pick<SourceFile, "changedLines" | "status">> {
+  const base = ctx.change?.baseRef;
+  if (base === undefined || !(await existsAtRevision(ctx.repoPath, base, path))) {
+    return { changedLines: new Set<number>(), status: "added" };
+  }
+
+  const args = ["diff", "--unified=0", base];
+  const head = ctx.change?.headRef;
+  if (head !== undefined && !ctx.change?.worktree) args.push(head);
+  args.push("--", path);
+  const patch = await gitOutput(ctx.repoPath, args);
+  return { changedLines: changedLineNumbers(patch), status: "modified" };
+}
+
+async function existsAtRevision(repoPath: string, revision: string, path: string): Promise<boolean> {
+  try {
+    await execute("git", ["-C", repoPath, "cat-file", "-e", `${revision}:${path}`], {
+      maxBuffer: 1024 * 1024,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function gitOutput(repoPath: string, args: string[]): Promise<string> {
+  const result = await execute("git", ["-C", repoPath, ...args], {
+    encoding: "utf8",
+    maxBuffer: 8 * 1024 * 1024,
+  });
+  return result.stdout;
+}
+
+function changedLineNumbers(patch: string): Set<number> {
+  const lines = new Set<number>();
+  for (const match of patch.matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/gm)) {
+    const start = Number(match[1]);
+    const count = match[2] === undefined ? 1 : Number(match[2]);
+    for (let line = start; line < start + count; line += 1) lines.add(line);
+  }
+  return lines;
 }
 
 async function walk(root: string): Promise<string[]> {

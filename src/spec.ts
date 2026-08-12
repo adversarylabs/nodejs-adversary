@@ -1,7 +1,7 @@
 import { type Confidence, type Severity } from "@adversarylabs/sdk";
 
 export interface MatchExpression { pattern: string; flags: string }
-interface ContentMatch { kind: "content"; files: string[]; pattern: MatchExpression; requires: MatchExpression[] }
+interface ContentMatch { kind: "content"; files: string[]; pattern: MatchExpression; anchors?: MatchExpression[]; requires: MatchExpression[] }
 interface MissingContentMatch { kind: "missing-content"; files: string[]; trigger: MatchExpression; required: MatchExpression }
 interface MissingFileMatch { kind: "missing-file"; triggerFiles: string[]; requiredFiles: string[] }
 interface EventListenerCleanupMatch { kind: "event-listener-cleanup"; files: string[] }
@@ -39,6 +39,16 @@ export const spec = {
           "pattern": "(?:exec|execSync)\\s*\\(\\s*[`'\"][^`'\"]*(?:\\$\\{|\\+)|(?:spawn|spawnSync)\\s*\\([^)]*shell\\s*:\\s*true",
           "flags": "i"
         },
+        "anchors": [
+          {
+            "pattern": "(?:exec|execSync|spawn|spawnSync)\\s*\\(",
+            "flags": "i"
+          },
+          {
+            "pattern": "\\$\\{|\\+|shell\\s*:\\s*true",
+            "flags": "i"
+          }
+        ],
         "requires": []
       }
     },
@@ -105,6 +115,16 @@ export const spec = {
           "pattern": "(?:fs\\.[\\w]+|readFile(?:Sync)?|writeFile(?:Sync)?|createReadStream|createWriteStream|sendFile)\\s*\\([\\s\\S]{0,120}req\\.(?:params|query|body)|path\\.join\\s*\\([^)]*req\\.(?:params|query|body)",
           "flags": "i"
         },
+        "anchors": [
+          {
+            "pattern": "(?:fs\\.[\\w]+|readFile(?:Sync)?|writeFile(?:Sync)?|createReadStream|createWriteStream|sendFile|path\\.join)\\s*\\(",
+            "flags": "i"
+          },
+          {
+            "pattern": "req\\.(?:params|query|body)",
+            "flags": "i"
+          }
+        ],
         "requires": []
       }
     },
@@ -127,6 +147,12 @@ export const spec = {
           "pattern": "(?:(?:token|secret|session|otp|nonce|resetCode|authCode)\\s*[=:]\\s*[\\s\\S]{0,40}Math\\.random\\s*\\(|Math\\.random\\s*\\([\\s\\S]{0,40}(?:token|secret|session|otp|nonce))",
           "flags": "i"
         },
+        "anchors": [
+          {
+            "pattern": "(?:token|secret|session|otp|nonce|resetCode|authCode)\\s*[=:]|Math\\.random\\s*\\(",
+            "flags": "i"
+          }
+        ],
         "requires": []
       }
     },
