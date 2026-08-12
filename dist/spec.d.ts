@@ -7,6 +7,7 @@ interface ContentMatch {
     kind: "content";
     files: string[];
     pattern: MatchExpression;
+    anchors?: MatchExpression[];
     requires: MatchExpression[];
 }
 interface MissingContentMatch {
@@ -69,6 +70,13 @@ export declare const spec: {
                 readonly pattern: "(?:exec|execSync)\\s*\\(\\s*[`'\"][^`'\"]*(?:\\$\\{|\\+)|(?:spawn|spawnSync)\\s*\\([^)]*shell\\s*:\\s*true";
                 readonly flags: "i";
             };
+            readonly anchors: [{
+                readonly pattern: "(?:exec|execSync|spawn|spawnSync)\\s*\\(";
+                readonly flags: "i";
+            }, {
+                readonly pattern: "\\$\\{|\\+|shell\\s*:\\s*true";
+                readonly flags: "i";
+            }];
             readonly requires: [];
         };
     }, {
@@ -132,6 +140,13 @@ export declare const spec: {
                 readonly pattern: "(?:fs\\.[\\w]+|readFile(?:Sync)?|writeFile(?:Sync)?|createReadStream|createWriteStream|sendFile)\\s*\\([\\s\\S]{0,120}req\\.(?:params|query|body)|path\\.join\\s*\\([^)]*req\\.(?:params|query|body)";
                 readonly flags: "i";
             };
+            readonly anchors: [{
+                readonly pattern: "(?:fs\\.[\\w]+|readFile(?:Sync)?|writeFile(?:Sync)?|createReadStream|createWriteStream|sendFile|path\\.join)\\s*\\(";
+                readonly flags: "i";
+            }, {
+                readonly pattern: "req\\.(?:params|query|body)";
+                readonly flags: "i";
+            }];
             readonly requires: [];
         };
     }, {
@@ -153,6 +168,10 @@ export declare const spec: {
                 readonly pattern: "(?:(?:token|secret|session|otp|nonce|resetCode|authCode)\\s*[=:]\\s*[\\s\\S]{0,40}Math\\.random\\s*\\(|Math\\.random\\s*\\([\\s\\S]{0,40}(?:token|secret|session|otp|nonce))";
                 readonly flags: "i";
             };
+            readonly anchors: [{
+                readonly pattern: "(?:token|secret|session|otp|nonce|resetCode|authCode)\\s*[=:]|Math\\.random\\s*\\(";
+                readonly flags: "i";
+            }];
             readonly requires: [];
         };
     }, {
