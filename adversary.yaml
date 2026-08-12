@@ -1,5 +1,5 @@
 name: lang/nodejs
-version: 0.0.7
+version: 0.0.8
 description: Reviews Node.js for security hazards and lifecycle cleanup leaks.
 
 triggers:
