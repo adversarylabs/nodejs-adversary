@@ -1,6 +1,6 @@
 name: lang/nodejs
 version: 0.0.6
-description: Reviews Node.js for dynamic code execution, shell injection, and disabled TLS verification.
+description: Reviews Node.js for security hazards and lifecycle cleanup leaks.
 
 triggers:
   manual: true

@@ -4,10 +4,11 @@ export interface MatchExpression { pattern: string; flags: string }
 interface ContentMatch { kind: "content"; files: string[]; pattern: MatchExpression; requires: MatchExpression[] }
 interface MissingContentMatch { kind: "missing-content"; files: string[]; trigger: MatchExpression; required: MatchExpression }
 interface MissingFileMatch { kind: "missing-file"; triggerFiles: string[]; requiredFiles: string[] }
+interface EventListenerCleanupMatch { kind: "event-listener-cleanup"; files: string[] }
 export interface RuleSpec {
   id: string; title: string; summary: string; category: string; severity: Severity; confidence: Confidence;
   whyItMatters: string; impact: string; recommendation: string; complexity: "trivial" | "small" | "medium" | "large"; tags: string[];
-  match: ContentMatch | MissingContentMatch | MissingFileMatch;
+  match: ContentMatch | MissingContentMatch | MissingFileMatch | EventListenerCleanupMatch;
 }
 export interface AdversarySpec { id: string; displayName: string; description: string; files: string[]; rules: RuleSpec[] }
 
@@ -16,7 +17,7 @@ const SOURCE_FILES = ["**/*.js", "**/*.mjs", "**/*.cjs", "**/*.ts"] as const;
 export const spec = {
   "id": "nodejs",
   "displayName": "Node.js",
-  "description": "Reviews Node.js for dynamic code execution, shell injection, and disabled TLS verification.",
+  "description": "Reviews Node.js for security hazards and lifecycle cleanup leaks.",
   "files": [...SOURCE_FILES],
   "rules": [
     {
@@ -149,6 +150,23 @@ export const spec = {
           "flags": "i"
         },
         "requires": []
+      }
+    },
+    {
+      "id": "nodejs.event-listener-cleanup",
+      "title": "Lifecycle cleanup leaves sibling EventEmitter listeners attached",
+      "summary": "Lifecycle cleanup leaves sibling EventEmitter listeners attached",
+      "category": "reliability",
+      "severity": "medium",
+      "confidence": "medium",
+      "whyItMatters": "A once listener removes only the registration that fired. Sibling lifecycle listeners using the same callback keep its closure and resources alive unless cleanup unregisters them too.",
+      "impact": "Long-lived or reused emitters retain stale callbacks, causing memory/resource leaks and cleanup to run again on later events.",
+      "recommendation": "In the shared cleanup callback, call removeListener or off for every lifecycle event that registered it.",
+      "complexity": "trivial",
+      "tags": ["reliability", "event-emitter", "resource-leak"],
+      "match": {
+        "kind": "event-listener-cleanup",
+        "files": [...SOURCE_FILES]
       }
     }
   ]
