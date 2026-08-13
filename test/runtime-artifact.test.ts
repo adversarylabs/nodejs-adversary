@@ -29,9 +29,11 @@ test("the published runtime executes without node_modules", async () => {
   const bundle = await readFile(entrypoint, "utf8");
   assert.doesNotMatch(bundle, /from\s+["']@adversarylabs\/sdk["']/);
   const notices = await readFile(join(artifact, "THIRD_PARTY_NOTICES.md"), "utf8");
-  assert.match(notices, /@adversarylabs\/sdk \(MIT\)/);
-  assert.match(notices, /fast-uri \(BSD-3-Clause\)/);
-  assert.match(notices, /yaml \(ISC\)/);
+  assert.deepEqual([...notices.matchAll(/^## (.+?) \(/gm)].map((match) => match[1]), [
+    "@adversarylabs/sdk", "ajv", "fast-deep-equal", "fast-uri", "json-schema-traverse", "yaml",
+  ]);
+  assert.match(notices, /Permission is hereby granted/);
+  assert.match(notices, /Redistribution and use in source and binary forms/);
 
   await execute(process.execPath, [entrypoint], {
     cwd: artifact,
