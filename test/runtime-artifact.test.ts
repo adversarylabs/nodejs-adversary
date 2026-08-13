@@ -22,11 +22,16 @@ test("the published runtime executes without node_modules", async () => {
   await copyFile(join(projectRoot, "dist", "index.js"), entrypoint);
   await copyFile(join(projectRoot, "schemas", "adversary.review.v1.schema.json"), join(artifact, "schemas", "adversary.review.v1.schema.json"));
   await copyFile(join(projectRoot, "package.json"), join(artifact, "package.json"));
+  await copyFile(join(projectRoot, "THIRD_PARTY_NOTICES.md"), join(artifact, "THIRD_PARTY_NOTICES.md"));
   await writeFile(join(repository, "app.js"), "export const ready = true;\n");
   await writeFile(input, `${JSON.stringify({ source: { path: repository } })}\n`);
 
   const bundle = await readFile(entrypoint, "utf8");
   assert.doesNotMatch(bundle, /from\s+["']@adversarylabs\/sdk["']/);
+  const notices = await readFile(join(artifact, "THIRD_PARTY_NOTICES.md"), "utf8");
+  assert.match(notices, /@adversarylabs\/sdk \(MIT\)/);
+  assert.match(notices, /fast-uri \(BSD-3-Clause\)/);
+  assert.match(notices, /yaml \(ISC\)/);
 
   await execute(process.execPath, [entrypoint], {
     cwd: artifact,
