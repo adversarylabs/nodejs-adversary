@@ -2,22 +2,20 @@
 
 Reviews Node.js for security hazards and lifecycle cleanup leaks.
 
-## Checks
+## Goals
 
-- **Application executes dynamically constructed JavaScript:** Replace dynamic evaluation with explicit parsing or dispatch.
-- **Node.js constructs a shell command from input:** Use execFile or spawn with a validated argument array.
-- **Node.js disables TLS certificate verification:** Keep verification enabled and configure trusted roots.
-- **Lifecycle cleanup leaves sibling EventEmitter listeners attached:** Unregister every lifecycle event that shares a cleanup callback.
+The adversary is designed to produce a small number of high-confidence,
+actionable findings grounded in concrete repository evidence. Its review should
+be deterministic where possible, explicit about impact, and quiet when the
+available evidence does not justify a finding.
 
-## Development
+## Scope
 
-```sh
-npm ci
-npm test
-adversary validate .
-adversary pack --check .
-```
+It evaluates Node.js source for command execution, dynamic evaluation, TLS, path confinement, weak randomness, VM isolation, and shared listener cleanup.
 
-## Automatic detection
+The complete detector or review inventory is maintained in
+[CHECKS.md](CHECKS.md).
 
-`adversary auto` selects the nodejs adversary when changes include `**/*.js` or `**/*.mjs`, plus the other domain-specific patterns declared in `adversary.yaml`. Unrelated changes do not select it.
+## Boundaries
+
+It owns framework- or language-specific review in this domain. Infrastructure, CI, dependency-manager, and unrelated application concerns remain with specialist adversaries.
