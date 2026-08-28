@@ -1,5 +1,5 @@
 name: adversarylabs/lang/nodejs
-version: 0.0.10
+version: 0.0.11
 description: Reviews Node.js for security hazards and lifecycle cleanup leaks.
 
 triggers:
