@@ -1,4 +1,4 @@
-name: lang/nodejs
+name: adversarylabs/lang/nodejs
 version: 0.0.10
 description: Reviews Node.js for security hazards and lifecycle cleanup leaks.
 
