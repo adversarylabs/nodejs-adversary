@@ -18112,7 +18112,7 @@ function matchesGlob(path, glob) {
 
 // src/index.ts
 function createApp() {
-  const app = new Adversary({ name: "lang/nodejs", version: "0.0.11", review: { maximumFindings: 12 } });
+  const app = new Adversary({ name: "lang/nodejs", version: "0.0.12", review: { maximumFindings: 12 } });
   registerRules(app);
   app.rule("nodejs.review", async (ctx) => analyzeRepository(ctx));
   return app;
