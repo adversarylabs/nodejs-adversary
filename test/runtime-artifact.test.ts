@@ -43,5 +43,5 @@ test("the published runtime executes without node_modules", async () => {
   const envelope = JSON.parse(await readFile(output, "utf8"));
   assert.equal(envelope.protocolVersion, 1);
   assert.equal(envelope.result.adversary.name, "lang/nodejs");
-  assert.equal(envelope.result.adversary.version, "0.0.11");
+  assert.equal(envelope.result.adversary.version, (JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8")) as { version: string }).version);
 });
